@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"errors"
+
 	"github.com/fabric8-services/fabric8-jenkins-proxy/clients"
 	"github.com/fabric8-services/fabric8-jenkins-proxy/internal/storage"
 	"github.com/patrickmn/go-cache"
@@ -28,6 +29,7 @@ const (
 	CookieJenkinsIdled = "JenkinsIdled"
 	ServiceName        = "jenkins"
 	SessionCookie      = "JSESSIONID"
+	RequestTimeout     = time.Second * 5
 )
 
 //Proxy handles requests, verifies authentication and proxies to Jenkins.
@@ -53,6 +55,7 @@ type Proxy struct {
 	storageService  storage.Store
 	indexPath       string
 	maxRequestRetry int
+	httpClient      *http.Client
 }
 
 type ProxyError struct {
@@ -65,6 +68,11 @@ type ProxyErrorInfo struct {
 }
 
 func NewProxy(t *clients.Tenant, w *clients.WIT, i *clients.Idler, keycloakURL string, authURL string, redirect string, storageService storage.Store, indexPath string, maxRequestRetry int) (Proxy, error) {
+	//Default timeout is too long, which results in request to proxy
+	//timing out before the request made by proxy to upstream
+	httpClient := &http.Client{
+		Timeout: time.Duration(RequestTimeout),
+	}
 	p := Proxy{
 		TenantCache:      cache.New(30*time.Minute, 40*time.Minute),
 		ProxyCache:       cache.New(15*time.Minute, 10*time.Minute),
@@ -78,6 +86,7 @@ func NewProxy(t *clients.Tenant, w *clients.WIT, i *clients.Idler, keycloakURL s
 		storageService:   storageService,
 		indexPath:        indexPath,
 		maxRequestRetry:  maxRequestRetry,
+		httpClient:       httpClient,
 	}
 
 	//Collect and parse public key from Keycloak
@@ -307,8 +316,7 @@ func (p *Proxy) loginJenkins(pci ProxyCacheItem, osoToken string) (int, []*http.
 	} else {
 		log.WithField("ns", pci.NS).Infof("Accessing Jenkins route %s", jenkinsURL)
 	}
-	c := http.DefaultClient
-	resp, err := c.Do(req)
+	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -415,7 +423,7 @@ func (p *Proxy) processTemplate(w http.ResponseWriter, ns string) (err error) {
 		Retry   int
 	}{
 		Message: "Jenkins has been idled. It is starting now, please wait...",
-		Retry:   10,
+		Retry:   15,
 	}
 	log.WithField("ns", ns).Debug("Templating index.html")
 	err = tmplt.Execute(w, data)
