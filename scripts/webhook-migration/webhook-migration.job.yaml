@@ -64,6 +64,8 @@ objects:
             value: ${TARGET_ENV}
           - name: DRY_RUN
             value: ${DRY_RUN}
+          - name: CHECK_NAMESPACES
+            value: ${CHECK_NAMESPACES}
         restartPolicy: Never
 parameters:
 - name: IMAGE
@@ -74,3 +76,4 @@ parameters:
   value: "stage"
 - name: DRY_RUN
   value: "true"
+- name: CHECK_NAMESPACES
