@@ -31,6 +31,11 @@ func (i Idler) IsIdle(namespace string) (bool, error) {
 		return true, err
 	}
 	defer resp.Body.Close()
+
+	//Fix for issue #150 until we solve multi-cluster support
+	if resp.StatusCode == http.StatusNotFound {
+		return false, nil
+	}
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return false, err
